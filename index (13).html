@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ravenkeep — комнаты и ширма</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">⚔</div>
+          <div>
+            <h1>Ravenkeep</h1>
+            <p>каналы и ширма</p>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-link active" data-view="home">Главная</button>
+          <button class="nav-link" data-view="campaign">Кампании</button>
+          <button class="nav-link" data-view="characters">Персонажи</button>
+          <button class="nav-link" data-view="chronicles">Хроники</button>
+          <button class="nav-link" data-view="settings">Настройки</button>
+        </nav>
+
+        <div id="sidebar-actions" class="sidebar-actions hidden">
+          <button id="create-room-btn" class="button primary full">+ Создать комнату</button>
+          <div class="room-list" id="room-list"></div>
+        </div>
+
+        <div class="sidebar-card">
+          <p class="card-label">Текущий режим</p>
+          <h3>Личный кабинет мастера</h3>
+          <p>Создавайте каналы, ведите общий чат и управляйте доступом к ширме.</p>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section id="home-view" class="view-panel">
+          <header class="topbar home-topbar">
+            <div>
+              <p class="eyebrow">Сессия 17 • Ночная смена</p>
+              <h2>Герои у подножия древней башни</h2>
+            </div>
+            <div class="topbar-actions">
+              <button class="button ghost">+ Новый сюжет</button>
+              <button id="open-campaign-btn" class="button primary">Открыть кампанию</button>
+            </div>
+          </header>
+
+          <section class="hero-home fancy-hero">
+            <div class="hero-copy-card">
+              <p class="eyebrow">MRPG • панель мастера</p>
+              <h1>Управляй кампанией как настоящий легендарный ведущий.</h1>
+              <p>
+                Создавай сцены, следи за героями и держи всех игроков в одном ритме без лишнего шума.
+              </p>
+              <div class="hero-actions">
+                <button class="button primary" data-open-campaign>Открыть кампанию</button>
+                <button class="button ghost">+ Новый сюжет</button>
+              </div>
+              <div class="hero-stats">
+                <div>
+                  <strong>24</strong>
+                  <span>активных кампаний</span>
+                </div>
+                <div>
+                  <strong>186</strong>
+                  <span>сцен за неделю</span>
+                </div>
+                <div>
+                  <strong>9</strong>
+                  <span>светлых артефактов</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="campaign-preview-card">
+              <div class="panel-header">
+                <p class="card-label">Текущий ход</p>
+              </div>
+              <div class="panel-body">
+                <div class="session-pill">Сцена 4 • Тень в часовне</div>
+                <ul class="panel-list">
+                  <li><span>Персонажи</span><strong>6</strong></li>
+                  <li><span>Состояние</span><strong>Напряжение</strong></li>
+                  <li><span>Проверка</span><strong>+3 к зову</strong></li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section class="home-grid">
+            <article class="info-card wide">
+              <div class="card-header">
+                <h3>Ближайшие события</h3>
+                <a href="#" class="card-link">Смотреть всё</a>
+              </div>
+              <div class="event-list">
+                <div class="event-item">
+                  <div>
+                    <h4>Проверка древнего портала</h4>
+                    <p>Через 12 минут • Илья, Марина, Саша</p>
+                  </div>
+                  <span class="tag">Сцена</span>
+                </div>
+                <div class="event-item">
+                  <div>
+                    <h4>Открыть свиток с проклятиями</h4>
+                    <p>Через 28 минут • Мастерская запись</p>
+                  </div>
+                  <span class="tag">Ритуал</span>
+                </div>
+                <div class="event-item">
+                  <div>
+                    <h4>Распределить награды</h4>
+                    <p>После завершения боя • Личный журнал</p>
+                  </div>
+                  <span class="tag">Добыча</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="info-card">
+              <div class="card-header">
+                <h3>Портрет группы</h3>
+                <a href="#" class="card-link">Обновить</a>
+              </div>
+              <div class="avatar-stack">
+                <div class="avatar">А</div>
+                <div class="avatar">М</div>
+                <div class="avatar">С</div>
+                <div class="avatar">К</div>
+              </div>
+              <p class="muted">
+                Группа действует как единый механизм: осторожно, быстро и с внутренним огнём.
+              </p>
+            </article>
+
+            <article class="info-card">
+              <div class="card-header">
+                <h3>Заметки мастера</h3>
+                <a href="#" class="card-link">Редактировать</a>
+              </div>
+              <ul class="notes-list">
+                <li>Параллельные линии истории не пересекать.</li>
+                <li>Сохранить тайну лунного ключа до финала.</li>
+                <li>Поставить шум в коридоре перед третьей сценой.</li>
+              </ul>
+            </article>
+          </section>
+        </section>
+
+        <section id="campaign-view" class="view-panel hidden">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Канал • Живая сессия</p>
+              <h2 id="room-title">Пепельный Круг</h2>
+              <p id="room-meta" class="muted">Владелец: Мастер • 3 участника</p>
+            </div>
+            <div class="topbar-actions">
+              <div class="role-switch" role="tablist" aria-label="Роль в комнате">
+                <button class="role-btn active" data-role="owner">Владелец</button>
+                <button class="role-btn" data-role="participant">Участник</button>
+              </div>
+            </div>
+          </header>
+
+          <section class="workspace-grid">
+            <div class="chat-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Общий чат</h3>
+                  <p class="muted">Сцена: Ритуал в часовне</p>
+                </div>
+                <div class="panel-head-actions">
+                  <button type="button" id="sheet-toggle-btn" class="button ghost small">Ширма</button>
+                  <span id="participants-pill" class="pill">3 участника</span>
+                </div>
+              </div>
+
+              <div id="chat-messages" class="chat-messages"></div>
+
+              <div class="dice-panel">
+                <div class="dice-buttons">
+                  <button type="button" class="dice-btn" data-sides="12">d12</button>
+                  <button type="button" class="dice-btn" data-sides="20">d20</button>
+                  <button type="button" class="dice-btn" data-sides="100">d100</button>
+                </div>
+                <div class="dice-custom">
+                  <input id="dice-custom-input" type="text" placeholder="Например: 2d10 или d20" />
+                  <button type="button" id="roll-custom-btn" class="button ghost small">Бросить</button>
+                </div>
+              </div>
+
+              <form id="message-form" class="composer">
+                <input id="message-input" type="text" placeholder="Написать в общий чат..." />
+                <button type="submit" class="button primary">Отправить</button>
+              </form>
+            </div>
+
+            <div class="sheet-rail" id="sheet-rail">
+              <aside class="sheet-panel" id="sheet-panel">
+                <div class="panel-head">
+                  <div>
+                    <h3>Ширма</h3>
+                    <p class="muted">Лист персонажа</p>
+                  </div>
+                  <span id="sheet-role-badge" class="pill accent">Все персонажи</span>
+                </div>
+
+                <div class="sheet-toolbar">
+                  <button type="button" id="add-image-btn" class="button ghost small">+ Изображение</button>
+                  <button type="button" id="add-field-btn" class="button ghost small">+ Поле</button>
+                </div>
+
+                <div id="sheet-content" class="sheet-content"></div>
+              </aside>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div id="modal-backdrop" class="modal-backdrop hidden">
+      <div class="modal" role="dialog" aria-modal="true" aria-label="Создание комнаты">
+        <h3>Создать комнату</h3>
+        <form id="room-form">
+          <label>
+            Название комнаты
+            <input name="roomName" type="text" placeholder="Например: Тёмный тракт" required />
+          </label>
+          <label>
+            Владелец
+            <input name="ownerName" type="text" placeholder="Имя мастера" required />
+          </label>
+          <label>
+            Участники
+            <input name="participants" type="text" placeholder="Аня, Борис, Кирилл" required />
+          </label>
+          <div class="modal-actions">
+            <button type="button" id="cancel-room" class="button ghost">Отмена</button>
+            <button type="submit" class="button primary">Создать</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
