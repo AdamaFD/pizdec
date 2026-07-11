@@ -38,6 +38,7 @@
       </aside>
 
       <main class="main">
+        <!-- Главный экран приложения: здесь переключаются домашняя страница, кампании и настройки -->
         <section id="home-view" class="view-panel">
           <header class="topbar home-topbar">
             <div>
@@ -153,6 +154,7 @@
           </section>
         </section>
 
+        <!-- Рабочее пространство кампании: чат, роли и ширма персонажа -->
         <section id="campaign-view" class="view-panel hidden">
           <header class="topbar">
             <div>
@@ -161,6 +163,7 @@
               <p id="room-meta" class="muted">Владелец: Мастер • 3 участника</p>
             </div>
             <div class="topbar-actions">
+              <button id="leave-campaign-btn" type="button" class="button ghost small">Выйти из кампании</button>
               <div class="role-switch" role="tablist" aria-label="Роль в комнате">
                 <button class="role-btn active" data-role="owner">Владелец</button>
                 <button class="role-btn" data-role="participant">Участник</button>
@@ -220,6 +223,139 @@
               </aside>
             </div>
           </section>
+        </section>
+
+        <!-- Экран персонажей: список героев и быстрый переход в кампанию -->
+        <section id="characters-view" class="view-panel hidden">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Персонажи</p>
+              <h2>Ваши герои и их история</h2>
+              <p class="muted">Смотрите всех созданных персонажей, открывайте кампании и продолжайте путь с нужным героем.</p>
+            </div>
+            <div class="topbar-actions">
+              <button id="add-profile-character-btn" type="button" class="button ghost">+ Добавить персонажа</button>
+            </div>
+          </header>
+
+          <div class="settings-grid">
+            <section class="settings-card characters-card">
+              <div class="card-header">
+                <h3>Ваши персонажи</h3>
+              </div>
+              <div id="profile-character-list" class="character-list"></div>
+              <div id="new-character-form" class="new-character-form hidden">
+                <h4>Новый персонаж</h4>
+                <label>
+                  Имя персонажа
+                  <input id="new-character-name" type="text" />
+                </label>
+                <label>
+                  Роль
+                  <input id="new-character-role" type="text" />
+                </label>
+                <label>
+                  Класс
+                  <input id="new-character-class" type="text" />
+                </label>
+                <div class="form-actions">
+                  <button id="cancel-new-character-btn" type="button" class="button ghost small">Отмена</button>
+                  <button id="save-new-character-btn" type="button" class="button primary small">Сохранить</button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <!-- Экран хроник: история первого захода в кампанию и сохранённые данные -->
+        <section id="chronicles-view" class="view-panel hidden">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Хроники</p>
+              <h2>История ваших кампаний</h2>
+              <p class="muted">Следите за входами в кампании, сохранёнными сценами и тем, с каким героем вы возвращаетесь к игре.</p>
+            </div>
+          </header>
+
+          <div class="settings-grid">
+            <section class="settings-card">
+              <div class="card-header">
+                <h3>История кампаний</h3>
+              </div>
+              <div id="campaign-history-summary" class="campaign-history-summary"></div>
+              <div id="chronicles-list" class="character-list"></div>
+            </section>
+
+            <section class="settings-card">
+              <div class="card-header">
+                <h3>Сохранённые кампании</h3>
+              </div>
+              <div id="saved-campaigns-list" class="character-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <!-- Экран настроек: профиль, вход через Google и параметры аккаунта -->
+        <section id="settings-view" class="view-panel hidden">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Настройки аккаунта</p>
+              <h2>Профиль</h2>
+              <p class="muted">Управляйте входом, настройками и персональными данными аккаунта.</p>
+            </div>
+            <div class="topbar-actions">
+              <button id="google-signin-btn" type="button" class="button ghost">Войти через Google</button>
+            </div>
+          </header>
+
+          <div class="settings-grid">
+            <section class="settings-card profile-card">
+              <div class="card-header">
+                <h3>Аккаунт</h3>
+              </div>
+              <div class="profile-status">
+                <span id="google-status-badge" class="pill accent">Не в сети</span>
+              </div>
+
+              <div class="avatar-upload-block">
+                <div id="profile-avatar-preview" class="profile-avatar-preview">А</div>
+                <button id="profile-avatar-btn" type="button" class="button ghost small">Загрузить аватар</button>
+                <input id="profile-avatar-input" type="file" accept="image/*" hidden />
+              </div>
+
+              <form id="profile-form" class="profile-form">
+                <label>
+                  Никнейм
+                  <input id="profile-name-input" type="text" />
+                </label>
+                <label>
+                  Пароль
+                  <input id="profile-password-input" type="password" />
+                </label>
+                <label>
+                  IP игрового аккаунта
+                  <input id="profile-ip-input" type="text" placeholder="127.0.0.1:3000" />
+                </label>
+                <label>
+                  Почта Google
+                  <input id="profile-email-input" type="email" disabled />
+                </label>
+                <label>
+                  О себе
+                  <textarea id="profile-bio-input" rows="4"></textarea>
+                </label>
+              </form>
+
+              <div class="theme-panel">
+                <h4>Цветовая гамма</h4>
+                <div class="theme-buttons">
+                  <button type="button" class="theme-btn active" data-theme="dark">Тёмная</button>
+                  <button type="button" class="theme-btn" data-theme="light">Светлая</button>
+                </div>
+              </div>
+            </section>
+
+          </div>
         </section>
       </main>
     </div>
