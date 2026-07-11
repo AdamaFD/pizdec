@@ -1,3 +1,4 @@
+// База данных в памяти: комнаты, сообщения и персонажи для демо-режима
 const rooms = [
   {
     id: 1,
@@ -93,6 +94,7 @@ rooms.forEach((room) => {
   }
 });
 
+// Ссылки на элементы интерфейса, которые будут обновляться в процессе работы
 const roomListEl = document.getElementById('room-list');
 const roomTitleEl = document.getElementById('room-title');
 const roomMetaEl = document.getElementById('room-meta');
@@ -121,13 +123,25 @@ const sheetToggleBtnEl = document.getElementById('sheet-toggle-btn');
 const addImageBtnEl = document.getElementById('add-image-btn');
 const addFieldBtnEl = document.getElementById('add-field-btn');
 const settingsViewEl = document.getElementById('settings-view');
+const charactersViewEl = document.getElementById('characters-view');
+const chroniclesViewEl = document.getElementById('chronicles-view');
 const googleSigninBtn = document.getElementById('google-signin-btn');
 const googleStatusBadgeEl = document.getElementById('google-status-badge');
 const profileNameInputEl = document.getElementById('profile-name-input');
+const profilePasswordInputEl = document.getElementById('profile-password-input');
+const profileIpInputEl = document.getElementById('profile-ip-input');
 const profileEmailInputEl = document.getElementById('profile-email-input');
 const profileBioInputEl = document.getElementById('profile-bio-input');
+const profileAvatarInputEl = document.getElementById('profile-avatar-input');
+const profileAvatarBtnEl = document.getElementById('profile-avatar-btn');
+const profileAvatarPreviewEl = document.getElementById('profile-avatar-preview');
+const themeButtons = document.querySelectorAll('.theme-btn');
 const profileCharacterListEl = document.getElementById('profile-character-list');
 const addProfileCharacterBtnEl = document.getElementById('add-profile-character-btn');
+const campaignHistorySummaryEl = document.getElementById('campaign-history-summary');
+const chroniclesListEl = document.getElementById('chronicles-list');
+const savedCampaignsListEl = document.getElementById('saved-campaigns-list');
+const leaveCampaignBtnEl = document.getElementById('leave-campaign-btn');
 const newCharacterFormEl = document.getElementById('new-character-form');
 const newCharacterNameInputEl = document.getElementById('new-character-name');
 const newCharacterRoleInputEl = document.getElementById('new-character-role');
@@ -143,10 +157,17 @@ document.body.appendChild(avatarInputEl);
 const userProfile = {
   googleSignedIn: false,
   displayName: 'Вы',
+  password: '',
   email: '',
-  bio: 'Ведущий приключений'
+  bio: 'Ведущий приключений',
+  ip: '127.0.0.1:3000',
+  theme: 'dark',
+  avatar: '',
+  savedCampaigns: [],
+  chronicles: []
 };
 
+// БЛОК 1: управление кнопками ширмы в зависимости от роли
 function updateSheetControls() {
   const isOwner = activeRole === 'owner';
   addImageBtnEl.style.display = isOwner ? 'inline-flex' : 'none';
@@ -154,6 +175,7 @@ function updateSheetControls() {
   addImageBtnEl.parentElement.style.display = isOwner ? 'flex' : 'none';
 }
 
+// БЛОК 2: список комнат и переключение между комнатами
 function renderRooms() {
   roomListEl.innerHTML = '';
 
@@ -174,6 +196,7 @@ function renderRooms() {
   });
 }
 
+// БЛОК 3: переключатель роли владельца / участника
 function updateRoleButtons() {
   roleButtons.forEach((button) => {
     const isActive = button.dataset.role === activeRole;
@@ -181,11 +204,13 @@ function updateRoleButtons() {
   });
 }
 
+// БЛОК 4: состояние панели ширмы — открыта или скрыта
 function updateSheetState() {
   sheetRailEl.classList.toggle('open', sheetPinned);
   document.querySelector('.workspace-grid').classList.toggle('open-sheet', sheetPinned);
 }
 
+// БЛОК 5: логика броска кубиков и генерации результатов
 function rollDiceFormula(expression) {
   const value = expression.trim().toLowerCase();
   const match = value.match(/^(?:(\d+)d)?(\d+)(?:([+-]\d+))?$/);
@@ -220,6 +245,7 @@ function rollDiceFormula(expression) {
   return { expression: value, rolls, total, modifier };
 }
 
+// БЛОК 6: добавление сообщений с результатом броска в чат
 function addDiceMessage(expression, result) {
   const room = rooms.find((item) => item.id === activeRoomId);
   if (!room) return;
@@ -243,6 +269,7 @@ function setActiveView(view) {
   sidebarActionsEl.classList.toggle('hidden', !isCampaign);
 }
 
+// БЛОК 8: вывод сообщений чата
 function renderMessages(room) {
   chatMessagesEl.innerHTML = '';
 
@@ -258,6 +285,7 @@ function renderMessages(room) {
   chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
 }
 
+// БЛОК 9: выбор персонажей, доступных для текущей роли
 function getVisibleCharacters(room) {
   if (activeRole === 'owner') {
     return room.characters;
@@ -266,6 +294,7 @@ function getVisibleCharacters(room) {
   return room.characters.filter((character) => character.playerName === 'Вы');
 }
 
+// БЛОК 10: выбранный персонаж для текущей комнаты
 function getSelectedCharacter(room) {
   const visibleCharacters = getVisibleCharacters(room);
   if (!visibleCharacters.length) return null;
@@ -281,6 +310,7 @@ function getSelectedCharacter(room) {
   return visibleCharacters[0];
 }
 
+// БЛОК 11: обработчики для ширмы: выбор персонажа, аватар и поля
 function bindSheetInteractions(room, selectedCharacter) {
   const characterButtons = sheetContentEl.querySelectorAll('[data-character-id]');
   characterButtons.forEach((button) => {
@@ -330,6 +360,7 @@ function bindSheetInteractions(room, selectedCharacter) {
   });
 }
 
+// БЛОК 12: отрисовка содержимого ширмы персонажа
 function renderSheet(room) {
   const isOwner = activeRole === 'owner';
   const visibleCharacters = getVisibleCharacters(room);
@@ -376,7 +407,7 @@ function renderSheet(room) {
 
   const avatarMarkup = selectedCharacter.avatar
     ? `<img src="${selectedCharacter.avatar}" alt="Изображение ${selectedCharacter.name}" />`
-    : `<span class="sheet-image-placeholder">📷<span>${isOwner ? 'Выбрать изображение' : 'Изображение недоступно'}</span></span>`;
+    : `<span class="sheet-image-placeholder">📷<span>${isOwner ? 'Выбрать изображение' : 'Изображение отсутствует'}</span></span>`;
 
   const avatarBlock = isOwner
     ? `<button type="button" class="sheet-image" data-avatar-trigger>${avatarMarkup}</button>`
@@ -404,23 +435,152 @@ function renderSheet(room) {
   bindSheetInteractions(room, selectedCharacter);
 }
 
+// БЛОК 13: список персонажей игрока для настроек
 function getPlayerCharacters() {
-  return rooms.flatMap((room) => room.characters.filter((character) => character.playerName === userProfile.displayName));
+  const currentRoom = rooms.find((room) => room.id === activeRoomId) || rooms[0];
+  const isOwnerView = activeRole === 'owner' || currentRoom.role === 'owner';
+
+  const characters = rooms.flatMap((room) => room.characters.filter((character) => {
+    const matchesOwnerView = isOwnerView || character.playerName === userProfile.displayName || character.playerName === 'Вы';
+    return isOwnerView ? true : matchesOwnerView;
+  }));
+
+  if (characters.length) {
+    return characters;
+  }
+
+  return (rooms[0]?.characters || []).map((character) => ({ ...character }));
 }
 
+function seedAccountHistory() {
+  if (userProfile.savedCampaigns.length || userProfile.chronicles.length) {
+    return;
+  }
+
+  const firstRoom = rooms[0];
+  const firstCharacter = firstRoom?.characters?.find((character) => character.playerName === 'Вы' || character.playerName === userProfile.displayName) || firstRoom?.characters?.[0];
+  if (firstRoom && firstCharacter) {
+    addSavedCampaignEntry(firstRoom, firstCharacter);
+  }
+}
+
+function addSavedCampaignEntry(room, character) {
+  const entry = {
+    id: `${room.id}-${Date.now()}`,
+    roomName: room.name,
+    owner: room.owner,
+    characterName: character?.name || 'Без героя',
+    enteredAt: new Date().toLocaleString('ru-RU')
+  };
+
+  userProfile.savedCampaigns = [entry, ...userProfile.savedCampaigns].slice(0, 8);
+  userProfile.chronicles = [entry, ...userProfile.chronicles].slice(0, 8);
+}
+
+function renderChronicles() {
+  seedAccountHistory();
+
+  const totalEntries = userProfile.chronicles.length;
+  const savedCount = userProfile.savedCampaigns.length;
+
+  if (campaignHistorySummaryEl) {
+    campaignHistorySummaryEl.innerHTML = `
+      <div class="summary-pills">
+        <span class="summary-pill">Входов: ${totalEntries}</span>
+        <span class="summary-pill">Сохранено: ${savedCount}</span>
+      </div>
+      <p>Здесь хранится история ваших возвращений в кампании, а также список комнат, к которым вы возвращались с любимым героем.</p>
+    `;
+  }
+
+  if (!userProfile.chronicles.length) {
+    chroniclesListEl.innerHTML = '<div class="empty-state">Пока нет истории входов в кампании. Сначала откройте кампанию и пройдите один заход.</div>';
+  } else {
+    chroniclesListEl.innerHTML = userProfile.chronicles
+      .map((entry) => `
+        <div class="profile-character-card">
+          <div>
+            <strong>${entry.roomName}</strong>
+            <small>${entry.characterName} • ${entry.enteredAt}</small>
+          </div>
+        </div>
+      `)
+      .join('');
+  }
+
+  if (!userProfile.savedCampaigns.length) {
+    savedCampaignsListEl.innerHTML = '<div class="empty-state">Кампании ещё не сохранялись на аккаунте. Открытие любой комнаты добавит запись в список.</div>';
+  } else {
+    savedCampaignsListEl.innerHTML = userProfile.savedCampaigns
+      .map((entry) => `
+        <div class="profile-character-card">
+          <div>
+            <strong>${entry.roomName}</strong>
+            <small>${entry.characterName} • ${entry.owner}</small>
+          </div>
+        </div>
+      `)
+      .join('');
+  }
+}
+
+// БЛОК 14: тема интерфейса — светлая или тёмная
+function applyTheme(theme) {
+  userProfile.theme = theme;
+  document.body.dataset.theme = theme;
+  themeButtons.forEach((button) => {
+    button.classList.toggle('active', button.dataset.theme === theme);
+  });
+}
+
+// БЛОК 15: обновление полей профиля и аватара
 function updateProfileFields() {
   profileNameInputEl.value = userProfile.displayName;
+  profilePasswordInputEl.value = userProfile.password;
+  profileIpInputEl.value = userProfile.ip;
   profileEmailInputEl.value = userProfile.email;
   profileBioInputEl.value = userProfile.bio;
   googleStatusBadgeEl.textContent = userProfile.googleSignedIn ? 'Вход выполнен' : 'Не в сети';
   googleStatusBadgeEl.classList.toggle('accent', userProfile.googleSignedIn);
   googleSigninBtn.textContent = userProfile.googleSignedIn ? 'Выйти из Google' : 'Войти через Google';
+
+  if (userProfile.avatar) {
+    profileAvatarPreviewEl.innerHTML = `<img src="${userProfile.avatar}" alt="Аватар пользователя" />`;
+  } else {
+    profileAvatarPreviewEl.textContent = userProfile.displayName.charAt(0).toUpperCase() || 'А';
+  }
+
+  applyTheme(userProfile.theme);
 }
 
+// БЛОК 16: список персонажей в разделе настроек
 function renderProfileCharacters() {
   const characters = getPlayerCharacters();
   if (!characters.length) {
-    profileCharacterListEl.innerHTML = '<div class="empty-state">У вас ещё нет созданных персонажей.</div>';
+    const fallbackRoom = rooms.find((room) => room.characters?.length) || rooms[0];
+    const fallbackCharacter = fallbackRoom?.characters?.[0];
+
+    if (fallbackCharacter) {
+      profileCharacterListEl.innerHTML = `
+        <div class="profile-character-card">
+          <div>
+            <strong>${fallbackCharacter.name}</strong>
+            <small>${fallbackCharacter.className} • ${fallbackCharacter.role}</small>
+          </div>
+          <div class="profile-character-actions">
+            <button type="button" class="button ghost small" data-action="open" data-character-id="${fallbackCharacter.id}" data-room-id="${fallbackRoom.id}">Открыть</button>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    profileCharacterListEl.innerHTML = `
+      <div class="empty-state">
+        У вас ещё нет созданных персонажей.<br />
+        Добавьте первого героя, чтобы он появился здесь.
+      </div>
+    `;
     return;
   }
 
@@ -451,6 +611,7 @@ function renderProfileCharacters() {
       activeRoomId = room.id;
       activeRole = room.role;
       activeCharacterByRoom[room.id] = characterId;
+      addSavedCampaignEntry(room, room.characters.find((character) => character.id === characterId));
       updateRoleButtons();
       render();
       setActiveView('campaign');
@@ -468,16 +629,21 @@ function renderProfileCharacters() {
         activeCharacterByRoom[room.id] = room.characters[0]?.id || null;
       }
       render();
-      renderSettingsView();
+      renderProfileCharacters();
+      renderChronicles();
     });
   });
 }
 
+// Обновление экрана настроек: профиль, аватар и список персонажей
+// БЛОК 17: объединение всех элементов настроек на страницу
+// БЛОК 17: объединение всех элементов настроек на страницу
 function renderSettingsView() {
   updateProfileFields();
-  renderProfileCharacters();
 }
 
+// БЛОК 18: форма добавления нового персонажа
+// БЛОК 18: форма добавления нового персонажа
 function toggleNewCharacterForm(show) {
   newCharacterFormEl.classList.toggle('hidden', !show);
   if (show) {
@@ -492,22 +658,37 @@ function toggleNewCharacterForm(show) {
 function setActiveView(view) {
   activeView = view;
   const isCampaign = view === 'campaign';
+  const isCharacters = view === 'characters';
+  const isChronicles = view === 'chronicles';
   const isSettings = view === 'settings';
   const isHome = view === 'home';
 
   navButtons.forEach((button) => {
-    button.classList.toggle('active', button.dataset.view === view);
+    button.classList.toggle('active', button.dataset.view === view || (view === 'home' && button.dataset.view === 'home'));
   });
 
   homeViewEl.classList.toggle('hidden', !isHome);
   campaignViewEl.classList.toggle('hidden', !isCampaign);
+  charactersViewEl.classList.toggle('hidden', !isCharacters);
+  chroniclesViewEl.classList.toggle('hidden', !isChronicles);
   settingsViewEl.classList.toggle('hidden', !isSettings);
   sidebarActionsEl.classList.toggle('hidden', !isCampaign);
+
+  if (isCharacters) {
+    renderProfileCharacters();
+  }
+
+  if (isChronicles) {
+    renderChronicles();
+  }
+
   if (isSettings) {
     renderSettingsView();
   }
 }
 
+// БЛОК 19: общая перерисовка интерфейса после изменений
+// БЛОК 19: общая перерисовка интерфейса после изменений
 function render() {
   const room = rooms.find((item) => item.id === activeRoomId) || rooms[0];
   roomTitleEl.textContent = room.name;
@@ -517,8 +698,11 @@ function render() {
   renderMessages(room);
   renderSheet(room);
   renderRooms();
+  renderProfileCharacters();
+  renderChronicles();
 }
 
+// БЛОК 20: обработчики событий интерфейса — чат, кубы, ширма, настройки и создание комнат
 messageFormEl.addEventListener('submit', (event) => {
   event.preventDefault();
   const text = messageInputEl.value.trim();
@@ -633,8 +817,39 @@ profileNameInputEl.addEventListener('input', (event) => {
   renderSettingsView();
 });
 
+profilePasswordInputEl.addEventListener('input', (event) => {
+  userProfile.password = event.target.value;
+});
+
+profileIpInputEl.addEventListener('input', (event) => {
+  userProfile.ip = event.target.value;
+});
+
 profileBioInputEl.addEventListener('input', (event) => {
   userProfile.bio = event.target.value;
+});
+
+profileAvatarBtnEl.addEventListener('click', () => {
+  profileAvatarInputEl.click();
+});
+
+profileAvatarInputEl.addEventListener('change', (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    userProfile.avatar = reader.result;
+    updateProfileFields();
+  };
+  reader.readAsDataURL(file);
+  event.target.value = '';
+});
+
+themeButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    applyTheme(button.dataset.theme);
+  });
 });
 
 addProfileCharacterBtnEl.addEventListener('click', () => {
@@ -670,7 +885,18 @@ saveNewCharacterBtnEl.addEventListener('click', () => {
   activeCharacterByRoom[room.id] = newCharacter.id;
   toggleNewCharacterForm(false);
   render();
-  renderSettingsView();
+  renderProfileCharacters();
+  renderChronicles();
+});
+
+leaveCampaignBtnEl.addEventListener('click', () => {
+  const room = rooms.find((item) => item.id === activeRoomId);
+  if (!room) return;
+  const selectedCharacter = room ? getSelectedCharacter(room) : null;
+  if (selectedCharacter) {
+    addSavedCampaignEntry(room, selectedCharacter);
+  }
+  setActiveView('home');
 });
 
 openCampaignBtn.addEventListener('click', () => {
@@ -731,6 +957,8 @@ roomForm.addEventListener('submit', (event) => {
   render();
 });
 
+seedAccountHistory();
 updateSheetState();
+applyTheme(userProfile.theme);
 setActiveView('home');
 render();
