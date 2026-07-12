@@ -512,6 +512,17 @@ input {
   text-decoration: none;
 }
 
+.card-link.as-button {
+  background: transparent;
+  font: inherit;
+}
+
+.home-notes-textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+}
+
 .panel-body {
   display: flex;
   flex-direction: column;
@@ -1086,8 +1097,10 @@ input {
   inset: 0;
   background: rgba(2, 4, 8, 0.74);
   display: grid;
-  place-items: center;
+  align-items: safe center;
+  justify-items: center;
   padding: 20px;
+  overflow-y: auto;
 }
 
 .modal-backdrop.hidden {
@@ -1097,6 +1110,8 @@ input {
 .modal {
   width: min(460px, 100%);
   padding: 20px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
 }
 
 .modal form {
