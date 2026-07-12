@@ -129,12 +129,7 @@
                 <h3>Портрет группы</h3>
                 <a href="#" class="card-link">Обновить</a>
               </div>
-              <div class="avatar-stack">
-                <div class="avatar">А</div>
-                <div class="avatar">М</div>
-                <div class="avatar">С</div>
-                <div class="avatar">К</div>
-              </div>
+              <div class="avatar-stack" id="group-avatar-stack"></div>
               <p class="muted">
                 Группа действует как единый механизм: осторожно, быстро и с внутренним огнём.
               </p>
@@ -188,12 +183,17 @@
 
               <div class="dice-panel">
                 <div class="dice-buttons">
+                  <button type="button" class="dice-btn" data-sides="3">d3</button>
+                  <button type="button" class="dice-btn" data-sides="4">d4</button>
+                  <button type="button" class="dice-btn" data-sides="6">d6</button>
+                  <button type="button" class="dice-btn" data-sides="8">d8</button>
+                  <button type="button" class="dice-btn" data-sides="10">d10</button>
                   <button type="button" class="dice-btn" data-sides="12">d12</button>
                   <button type="button" class="dice-btn" data-sides="20">d20</button>
                   <button type="button" class="dice-btn" data-sides="100">d100</button>
                 </div>
                 <div class="dice-custom">
-                  <input id="dice-custom-input" type="text" placeholder="Например: 2d10 или d20" />
+                  <input id="dice-custom-input" type="text" placeholder="Например: d20 d100 или 2d10, 3d6+2" />
                   <button type="button" id="roll-custom-btn" class="button ghost small">Бросить</button>
                 </div>
               </div>
@@ -283,6 +283,13 @@
                 <h3>История кампаний</h3>
               </div>
               <div id="campaign-history-summary" class="campaign-history-summary"></div>
+              <div class="chronicle-filter">
+                <label>
+                  Показать за дату
+                  <input type="date" id="chronicle-date-filter" />
+                </label>
+                <button type="button" id="chronicle-date-reset" class="button ghost small">Сбросить</button>
+              </div>
               <div id="chronicles-list" class="character-list"></div>
             </section>
 
@@ -368,19 +375,31 @@
             Название комнаты
             <input name="roomName" type="text" placeholder="Например: Тёмный тракт" required />
           </label>
-          <label>
-            Владелец
-            <input name="ownerName" type="text" placeholder="Имя мастера" required />
-          </label>
-          <label>
-            Участники
-            <input name="participants" type="text" placeholder="Аня, Борис, Кирилл" required />
-          </label>
+          <div class="modal-owner-info">
+            Мастер: <strong id="modal-owner-name">Вы</strong>
+            <span class="muted">— вы автоматически становитесь мастером новой кампании</span>
+          </div>
+          <div class="modal-field-block">
+            <p class="field-label">Участники</p>
+            <div id="participant-picker-list" class="participant-picker-list"></div>
+          </div>
           <div class="modal-actions">
             <button type="button" id="cancel-room" class="button ghost">Отмена</button>
             <button type="submit" class="button primary">Создать</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <div id="chronicle-chat-modal" class="modal-backdrop hidden">
+      <div class="modal chronicle-modal" role="dialog" aria-modal="true" aria-label="История чата">
+        <h3 id="chronicle-chat-title">История чата</h3>
+        <p id="chronicle-chat-meta" class="muted"></p>
+        <div id="chronicle-chat-messages" class="chat-messages chronicle-chat-messages"></div>
+        <div class="modal-actions">
+          <button type="button" id="chronicle-download-btn" class="button ghost">Скачать историю</button>
+          <button type="button" id="chronicle-chat-close" class="button primary">Закрыть</button>
+        </div>
       </div>
     </div>
 
