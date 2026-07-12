@@ -187,6 +187,15 @@ const userProfile = {
   chronicles: []
 };
 
+// Блокнот мастера на главной странице — свободный текст, сохраняется в памяти
+// сессии (как и остальные данные демо-режима), редактируется по клику.
+let homeMasterNotes = [
+  'Параллельные линии истории не пересекать.',
+  'Сохранить тайну лунного ключа до финала.',
+  'Поставить шум в коридоре перед третьей сценой.'
+].join('\n');
+let homeNotesEditing = false;
+
 // БЛОК 1: управление кнопками ширмы в зависимости от роли
 function updateSheetControls() {
   const isOwner = activeRole === 'owner';
@@ -737,17 +746,19 @@ function seedAccountHistory() {
   }
 }
 
-// БЛОК: запись входа в кампанию вместе со снимком чата на этот момент
+// БЛОК: запись входа в кампанию — хранит ссылку на комнату, а не замороженный
+// снимок чата, поэтому все сообщения и броски кубов, отправленные позже,
+// тоже видны в истории при просмотре записи.
 function addSavedCampaignEntry(room, character) {
   const now = new Date();
   const entry = {
     id: `${room.id}-${Date.now()}`,
+    roomId: room.id,
     roomName: room.name,
     owner: room.owner,
     characterName: character?.name || 'Без героя',
     enteredAt: now.toLocaleString('ru-RU'),
-    enteredAtIso: now.toISOString(),
-    messages: room.messages.map((message) => ({ ...message }))
+    enteredAtIso: now.toISOString()
   };
 
   userProfile.savedCampaigns = [entry, ...userProfile.savedCampaigns].slice(0, 8);
@@ -758,6 +769,13 @@ function addSavedCampaignEntry(room, character) {
 function findChronicleEntry(id) {
   return userProfile.chronicles.find((entry) => entry.id === id)
     || userProfile.savedCampaigns.find((entry) => entry.id === id);
+}
+
+// БЛОК: текущие сообщения комнаты, к которой относится запись хроники
+// (живые, а не зафиксированные на момент входа)
+function getChronicleMessages(entry) {
+  const room = rooms.find((item) => item.id === entry.roomId);
+  return room ? room.messages : [];
 }
 
 // БЛОК: фильтрация хроник по выбранной дате
@@ -782,10 +800,11 @@ function openChronicleChat(id) {
 
   activeChronicleId = id;
   chronicleChatTitleEl.textContent = entry.roomName;
-  chronicleChatMetaEl.textContent = `${entry.characterName} • ${entry.owner} • ${entry.enteredAt}`;
+  chronicleChatMetaEl.textContent = `${entry.characterName} • ${entry.owner} • первый вход: ${entry.enteredAt}`;
 
-  chronicleChatMessagesEl.innerHTML = entry.messages?.length
-    ? entry.messages
+  const messages = getChronicleMessages(entry);
+  chronicleChatMessagesEl.innerHTML = messages.length
+    ? messages
       .map((message) => `
         <div class="message ${message.self ? 'self' : ''}">
           <strong>${escapeHtml(message.author)}</strong>
@@ -793,7 +812,7 @@ function openChronicleChat(id) {
         </div>
       `)
       .join('')
-    : '<div class="empty-state">На момент этой записи в чате ещё не было сообщений.</div>';
+    : '<div class="empty-state">В чате этой кампании пока нет сообщений.</div>';
 
   chronicleChatModalEl.classList.remove('hidden');
 }
@@ -805,14 +824,15 @@ function closeChronicleChat() {
 
 // БЛОК: подготовка текстового файла с историей чата для скачивания
 function formatChronicleForDownload(entry) {
+  const messages = getChronicleMessages(entry);
   const lines = [
     `Кампания: ${entry.roomName}`,
     `Владелец: ${entry.owner}`,
     `Персонаж: ${entry.characterName}`,
-    `Дата входа: ${entry.enteredAt}`,
+    `Первый вход: ${entry.enteredAt}`,
     '',
-    ...(entry.messages?.length
-      ? entry.messages.map((message) => `${message.author}: ${message.text}`)
+    ...(messages.length
+      ? messages.map((message) => `${message.author}: ${message.text}`)
       : ['Сообщений нет.'])
   ];
   return lines.join('\n');
@@ -1065,6 +1085,30 @@ function setActiveView(view) {
   if (isSettings) {
     renderSettingsView();
   }
+}
+
+// БЛОК 18а: блокнот мастера на главной — кликабельный, сохраняет текст между открытиями
+function renderHomeNotes() {
+  const viewEl = document.getElementById('home-notes-view');
+  const toggleEl = document.getElementById('home-notes-toggle');
+  if (!viewEl) return;
+
+  if (homeNotesEditing) {
+    viewEl.innerHTML = `<textarea id="home-notes-textarea" class="home-notes-textarea" placeholder="Пишите сюда — заметки сохраняются, пока открыта страница">${escapeHtml(homeMasterNotes)}</textarea>`;
+    const textarea = document.getElementById('home-notes-textarea');
+    textarea.addEventListener('input', (event) => {
+      homeMasterNotes = event.target.value;
+    });
+    textarea.focus();
+    if (toggleEl) toggleEl.textContent = 'Сохранить';
+    return;
+  }
+
+  const lines = homeMasterNotes.split('\n').map((line) => line.trim()).filter(Boolean);
+  viewEl.innerHTML = lines.length
+    ? `<ul class="notes-list">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+    : '<div class="empty-state">Заметок пока нет — нажмите «Редактировать», чтобы добавить.</div>';
+  if (toggleEl) toggleEl.textContent = 'Редактировать';
 }
 
 // БЛОК 18б: «Портрет группы» на главной — реальные аватары персонажей текущей
@@ -1442,8 +1486,17 @@ roomForm.addEventListener('submit', (event) => {
   render();
 });
 
+const homeNotesToggleEl = document.getElementById('home-notes-toggle');
+if (homeNotesToggleEl) {
+  homeNotesToggleEl.addEventListener('click', () => {
+    homeNotesEditing = !homeNotesEditing;
+    renderHomeNotes();
+  });
+}
+
 seedAccountHistory();
 updateSheetState();
 applyTheme(userProfile.theme);
 setActiveView('home');
+renderHomeNotes();
 render();
