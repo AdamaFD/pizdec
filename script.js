@@ -1,3 +1,8 @@
+// Бета-режим: живых аккаунтов ещё нет, поэтому участники выбираются из
+// фиксированного списка ников. Мастером кампании всегда становится текущий
+// профиль (см. userProfile.displayName), поэтому в список участников он не входит.
+const DEMO_PLAYER_POOL = ['Аня', 'Борис', 'Кирилл', 'Марина', 'Саша'];
+
 // База данных в памяти: комнаты, сообщения и персонажи для демо-режима
 const rooms = [
   {
@@ -19,6 +24,7 @@ const rooms = [
         role: 'Тайный арканист',
         className: 'Арканист',
         avatar: '',
+        dmNote: '',
         fields: [
           { label: 'Раса', value: 'Арканист', type: 'text' },
           { label: 'Возраст', value: '24', type: 'text' },
@@ -32,6 +38,7 @@ const rooms = [
         role: 'Клинок тени',
         className: 'Воин',
         avatar: '',
+        dmNote: '',
         fields: [
           { label: 'Раса', value: 'Человек', type: 'text' },
           { label: 'Возраст', value: '31', type: 'text' },
@@ -45,6 +52,7 @@ const rooms = [
         role: 'Смотритель ритуала',
         className: 'Монах',
         avatar: '',
+        dmNote: '',
         fields: [
           { label: 'Раса', value: 'Полурослик', type: 'text' },
           { label: 'Возраст', value: '47', type: 'text' },
@@ -72,6 +80,7 @@ const rooms = [
         role: 'Капитан',
         className: 'Паладин',
         avatar: '',
+        dmNote: '',
         fields: [
           { label: 'Раса', value: 'Человек', type: 'text' },
           { label: 'Возраст', value: '29', type: 'text' },
@@ -86,6 +95,7 @@ let activeRoomId = rooms[0].id;
 let activeRole = 'owner';
 let activeView = 'home';
 let sheetPinned = false;
+let activeChronicleId = null;
 const activeCharacterByRoom = {};
 
 rooms.forEach((room) => {
@@ -113,6 +123,8 @@ const createRoomBtn = document.getElementById('create-room-btn');
 const modalBackdrop = document.getElementById('modal-backdrop');
 const roomForm = document.getElementById('room-form');
 const cancelRoomBtn = document.getElementById('cancel-room');
+const modalOwnerNameEl = document.getElementById('modal-owner-name');
+const participantPickerListEl = document.getElementById('participant-picker-list');
 const homeViewEl = document.getElementById('home-view');
 const campaignViewEl = document.getElementById('campaign-view');
 const sidebarActionsEl = document.getElementById('sidebar-actions');
@@ -141,6 +153,14 @@ const addProfileCharacterBtnEl = document.getElementById('add-profile-character-
 const campaignHistorySummaryEl = document.getElementById('campaign-history-summary');
 const chroniclesListEl = document.getElementById('chronicles-list');
 const savedCampaignsListEl = document.getElementById('saved-campaigns-list');
+const chronicleDateFilterEl = document.getElementById('chronicle-date-filter');
+const chronicleDateResetEl = document.getElementById('chronicle-date-reset');
+const chronicleChatModalEl = document.getElementById('chronicle-chat-modal');
+const chronicleChatTitleEl = document.getElementById('chronicle-chat-title');
+const chronicleChatMetaEl = document.getElementById('chronicle-chat-meta');
+const chronicleChatMessagesEl = document.getElementById('chronicle-chat-messages');
+const chronicleDownloadBtnEl = document.getElementById('chronicle-download-btn');
+const chronicleChatCloseEl = document.getElementById('chronicle-chat-close');
 const leaveCampaignBtnEl = document.getElementById('leave-campaign-btn');
 const newCharacterFormEl = document.getElementById('new-character-form');
 const newCharacterNameInputEl = document.getElementById('new-character-name');
@@ -175,6 +195,16 @@ function updateSheetControls() {
   addImageBtnEl.parentElement.style.display = isOwner ? 'flex' : 'none';
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[char]));
+}
+
 // БЛОК 2: список комнат и переключение между комнатами
 function renderRooms() {
   roomListEl.innerHTML = '';
@@ -183,8 +213,8 @@ function renderRooms() {
     const button = document.createElement('button');
     button.className = `room-item ${room.id === activeRoomId ? 'active' : ''}`;
     button.innerHTML = `
-      <strong>${room.name}</strong>
-      <p>${room.owner} • ${room.participants.length + 1} в сети</p>
+      <strong>${escapeHtml(room.name)}</strong>
+      <p>${escapeHtml(room.owner)} • ${room.participants.length + 1} в сети</p>
     `;
     button.addEventListener('click', () => {
       activeRoomId = room.id;
@@ -213,7 +243,7 @@ function updateSheetState() {
 // БЛОК 5: логика броска кубиков и генерации результатов
 function rollDiceFormula(expression) {
   const value = expression.trim().toLowerCase();
-  const match = value.match(/^(?:(\d+)d)?(\d+)(?:([+-]\d+))?$/);
+  const match = value.match(/^(\d+)?d?(\d+)(?:([+-]\d+))?$/);
 
   if (!match) {
     return null;
@@ -246,39 +276,90 @@ function rollDiceFormula(expression) {
 }
 
 // БЛОК 6: добавление сообщений с результатом броска в чат
-function addDiceMessage(expression, result) {
+const DICE_MESSAGE_BATCH_SIZE = 10;
+
+function formatDiceLine(expression, result) {
+  return `🎲 ${expression} → ${result.rolls.join(', ')} = ${result.total}`;
+}
+
+// Собирает несколько бросков в одно сообщение (до DICE_MESSAGE_BATCH_SIZE штук),
+// а если бросков больше — разносит остаток по следующим сообщениям.
+function addDiceMessages(rollsList) {
+  if (!rollsList.length) return;
+
   const room = rooms.find((item) => item.id === activeRoomId);
   if (!room) return;
 
-  const summary = `${expression} → ${result.rolls.join(', ')} = ${result.total}`;
-  room.messages.push({ author: 'Вы', text: `🎲 ${summary}`, self: true });
+  for (let i = 0; i < rollsList.length; i += DICE_MESSAGE_BATCH_SIZE) {
+    const chunk = rollsList.slice(i, i + DICE_MESSAGE_BATCH_SIZE);
+    const text = chunk.map(({ expression, result }) => formatDiceLine(expression, result)).join('\n');
+    room.messages.push({ author: 'Вы', text, self: true });
+  }
+
   renderMessages(room);
 }
 
-function setActiveView(view) {
-  activeView = view;
-  const isCampaign = view === 'campaign';
-  const isHome = view === 'home' || view === 'characters' || view === 'chronicles' || view === 'settings';
+function addDiceMessage(expression, result) {
+  addDiceMessages([{ expression, result }]);
+}
 
-  navButtons.forEach((button) => {
-    button.classList.toggle('active', button.dataset.view === view || (isHome && button.dataset.view === 'home'));
-  });
+// БЛОК 6б: разбор нескольких формул через запятую и/или пробел, например "1d10, 3d14" или "d20 d100"
+function rollMultipleFormulas(rawInput) {
+  const parts = rawInput.split(/[,\s]+/).map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return null;
 
-  homeViewEl.classList.toggle('hidden', !isHome);
-  campaignViewEl.classList.toggle('hidden', !isCampaign);
-  sidebarActionsEl.classList.toggle('hidden', !isCampaign);
+  const rolls = [];
+  for (const part of parts) {
+    const result = rollDiceFormula(part);
+    if (!result) {
+      return { invalidExpression: part };
+    }
+    rolls.push({ expression: part, result });
+  }
+
+  return { rolls };
+}
+
+// БЛОК 6в: выполнение броска из поля ручного ввода (кнопка или Enter)
+function performCustomRoll() {
+  const raw = diceCustomInputEl.value.trim();
+  if (!raw) return;
+
+  const outcome = rollMultipleFormulas(raw);
+  if (!outcome) return;
+
+  const room = rooms.find((item) => item.id === activeRoomId);
+  if (!room) return;
+
+  if (outcome.invalidExpression) {
+    room.messages.push({
+      author: 'Система',
+      text: `Формат куба не распознан: "${outcome.invalidExpression}". Попробуй: d20, 2d10, 3d6+2 — несколько кубов можно вписать через запятую или пробел: d20 d100, 1d10 3d14`,
+      self: false
+    });
+    renderMessages(room);
+    return;
+  }
+
+  addDiceMessages(outcome.rolls);
+  diceCustomInputEl.value = '';
 }
 
 // БЛОК 8: вывод сообщений чата
 function renderMessages(room) {
   chatMessagesEl.innerHTML = '';
 
+  if (!room.messages.length) {
+    chatMessagesEl.innerHTML = '<div class="empty-state">Чат пуст — напишите первое сообщение, чтобы начать сцену.</div>';
+    return;
+  }
+
   room.messages.forEach((message) => {
     const item = document.createElement('div');
     item.className = `message ${message.self ? 'self' : ''}`;
     item.innerHTML = `
-      <strong>${message.author}</strong>
-      <span>${message.text}</span>
+      <strong>${escapeHtml(message.author)}</strong>
+      <span>${escapeHtml(message.text)}</span>
     `;
     chatMessagesEl.appendChild(item);
   });
@@ -292,6 +373,39 @@ function getVisibleCharacters(room) {
   }
 
   return room.characters.filter((character) => character.playerName === 'Вы');
+}
+
+// БЛОК 9б: полный список участников комнаты для мастера — реальные персонажи
+// плюс "заглушки" для игроков, которые ещё не заполнили шаблон ширмы.
+// Заглушка показывает ник и круглый аватар из профиля игрока (если это текущий
+// пользователь браузера) — как только шаблон заполнен, запись заменяется на
+// настоящего персонажа с его аватаром и именем.
+function getRoomRosterEntries(room) {
+  const entries = room.characters.map((character) => ({
+    type: 'character',
+    id: character.id,
+    playerName: character.playerName,
+    displayName: character.name,
+    subtitle: character.role,
+    avatar: character.avatar
+  }));
+
+  const namesWithCharacters = new Set(room.characters.map((character) => character.playerName));
+
+  room.participants.forEach((participantName) => {
+    if (namesWithCharacters.has(participantName)) return;
+
+    entries.push({
+      type: 'placeholder',
+      id: `placeholder:${participantName}`,
+      playerName: participantName,
+      displayName: participantName,
+      subtitle: 'Шаблон ширмы ещё не заполнен',
+      avatar: participantName === userProfile.displayName ? userProfile.avatar : ''
+    });
+  });
+
+  return entries;
 }
 
 // БЛОК 10: выбранный персонаж для текущей комнаты
@@ -310,7 +424,15 @@ function getSelectedCharacter(room) {
   return visibleCharacters[0];
 }
 
-// БЛОК 11: обработчики для ширмы: выбор персонажа, аватар и поля
+// БЛОК 10б: текущий выбранный персонаж (реальный, без побочных эффектов на выбор)
+// — используется кнопками "+ Изображение"/"+ Поле" и выходом из кампании,
+// чтобы не сбрасывать выбранную в ростере заглушку игрока на первого персонажа.
+function getActiveRealCharacter(room) {
+  const selectedId = activeCharacterByRoom[room.id];
+  return room.characters.find((character) => character.id === selectedId) || null;
+}
+
+// БЛОК 11: обработчики для ширмы: выбор персонажа, аватар, поля и заметка мастера
 function bindSheetInteractions(room, selectedCharacter) {
   const characterButtons = sheetContentEl.querySelectorAll('[data-character-id]');
   characterButtons.forEach((button) => {
@@ -319,6 +441,33 @@ function bindSheetInteractions(room, selectedCharacter) {
       renderSheet(room);
     });
   });
+
+  const createForButton = sheetContentEl.querySelector('[data-create-for-participant]');
+  if (createForButton) {
+    createForButton.addEventListener('click', () => {
+      const participantName = createForButton.dataset.createForParticipant;
+      const newCharacter = {
+        id: `char-${Date.now()}`,
+        playerName: participantName,
+        name: participantName,
+        role: 'Игрок',
+        className: 'Персонаж',
+        avatar: '',
+        dmNote: '',
+        fields: [
+          { label: 'Раса', value: '', type: 'text' },
+          { label: 'Возраст', value: '', type: 'text' },
+          { label: 'Снаряжение', value: '', type: 'textarea' }
+        ]
+      };
+      room.characters.push(newCharacter);
+      activeCharacterByRoom[room.id] = newCharacter.id;
+      renderSheet(room);
+      renderGroupPortrait();
+    });
+  }
+
+  if (!selectedCharacter) return;
 
   const imageTrigger = sheetContentEl.querySelector('[data-avatar-trigger]');
   if (imageTrigger && activeRole === 'owner') {
@@ -336,6 +485,7 @@ function bindSheetInteractions(room, selectedCharacter) {
     reader.onload = () => {
       selectedCharacter.avatar = reader.result;
       renderSheet(room);
+      renderGroupPortrait();
     };
     reader.readAsDataURL(file);
     event.target.value = '';
@@ -358,47 +508,157 @@ function bindSheetInteractions(room, selectedCharacter) {
       }
     });
   });
+
+  sheetContentEl.querySelectorAll('.sheet-field-delete').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (activeRole !== 'owner') return;
+      const index = Number(button.dataset.fieldIndex);
+      selectedCharacter.fields.splice(index, 1);
+      renderSheet(room);
+    });
+  });
+
+  const notebookToggle = sheetContentEl.querySelector('[data-notebook-toggle]');
+  const notebookBody = sheetContentEl.querySelector('.sheet-notebook-body');
+  if (notebookToggle && notebookBody) {
+    notebookToggle.addEventListener('click', () => {
+      notebookBody.classList.toggle('hidden');
+      notebookToggle.classList.toggle('open');
+    });
+  }
+
+  const notebookTextarea = sheetContentEl.querySelector('.sheet-notebook-textarea');
+  if (notebookTextarea) {
+    notebookTextarea.addEventListener('input', (event) => {
+      selectedCharacter.dmNote = event.target.value;
+      if (notebookToggle) {
+        const label = notebookToggle.querySelector('span');
+        const existingDot = notebookToggle.querySelector('.notebook-dot');
+        const hasText = Boolean(event.target.value.trim());
+        if (hasText && !existingDot) {
+          label.insertAdjacentHTML('beforeend', '<span class="notebook-dot"></span>');
+        } else if (!hasText && existingDot) {
+          existingDot.remove();
+        }
+      }
+    });
+  }
 }
 
 // БЛОК 12: отрисовка содержимого ширмы персонажа
 function renderSheet(room) {
   const isOwner = activeRole === 'owner';
-  const visibleCharacters = getVisibleCharacters(room);
+
+  if (isOwner) {
+    renderOwnerSheet(room);
+    return;
+  }
+
+  renderPlayerSheet(room);
+}
+
+// Ширма мастера: ростер всех игроков комнаты (в т.ч. тех, кто ещё не создал персонажа)
+function renderOwnerSheet(room) {
+  const roster = getRoomRosterEntries(room);
+  sheetRoleBadgeEl.textContent = 'Все персонажи';
+
+  if (!roster.length) {
+    sheetContentEl.innerHTML = '<div class="empty-state">В этой комнате пока нет ни одного участника.</div>';
+    return;
+  }
+
+  const preferredId = activeCharacterByRoom[room.id];
+  const selectedEntry = roster.find((entry) => entry.id === preferredId) || roster[0];
+  activeCharacterByRoom[room.id] = selectedEntry.id;
+
+  const characterList = `
+    <div class="sheet-character-list">
+      ${roster
+        .map((entry) => {
+          const avatarInner = entry.avatar
+            ? `<img src="${entry.avatar}" alt="" />`
+            : escapeHtml((entry.displayName || '?').charAt(0).toUpperCase());
+          return `
+            <button type="button" class="sheet-character-item ${entry.id === selectedEntry.id ? 'active' : ''} ${entry.type === 'placeholder' ? 'placeholder-item' : ''}" data-character-id="${entry.id}">
+              <span class="sheet-roster-avatar">${avatarInner}</span>
+              <span class="sheet-roster-text">
+                <strong>${escapeHtml(entry.playerName)}${entry.type === 'character' ? ` / ${escapeHtml(entry.displayName)}` : ''}</strong>
+                <small>${escapeHtml(entry.subtitle)}</small>
+              </span>
+            </button>
+          `;
+        })
+        .join('')}
+    </div>
+  `;
+
+  if (selectedEntry.type === 'placeholder') {
+    sheetContentEl.innerHTML = `
+      <div class="sheet-list">
+        ${characterList}
+        <article class="character-card">
+          <div class="sheet-image">
+            <span class="sheet-image-placeholder">🧙<span>Игрок ещё не заполнил шаблон</span></span>
+          </div>
+          <h4>${escapeHtml(selectedEntry.playerName)}</h4>
+          <p class="muted">
+            Этот игрок уже в кампании, но пока не создал персонажа — здесь отображаются только ник и аватар из его профиля.
+            Как только шаблон будет заполнен, тут появится аватар и имя персонажа.
+          </p>
+          <button type="button" class="button primary full" data-create-for-participant="${escapeHtml(selectedEntry.playerName)}">Создать карточку за игрока</button>
+        </article>
+      </div>
+    `;
+    bindSheetInteractions(room, null);
+    return;
+  }
+
+  const selectedCharacter = room.characters.find((character) => character.id === selectedEntry.id);
+  sheetContentEl.innerHTML = `
+    <div class="sheet-list">
+      ${characterList}
+      ${renderCharacterCard(selectedCharacter, true)}
+    </div>
+  `;
+  bindSheetInteractions(room, selectedCharacter);
+}
+
+// Ширма игрока: только его собственный персонаж (если уже создан)
+function renderPlayerSheet(room) {
   const selectedCharacter = getSelectedCharacter(room);
+  sheetRoleBadgeEl.textContent = 'Только мой';
 
-  sheetRoleBadgeEl.textContent = isOwner ? 'Все персонажи' : 'Только мой';
-
-  if (!visibleCharacters.length || !selectedCharacter) {
+  if (!selectedCharacter) {
     sheetContentEl.innerHTML = '<div class="empty-state">У вас пока нет доступных персонажей в этой сцене.</div>';
     return;
   }
 
-  const characterList = isOwner
-    ? `
-      <div class="sheet-character-list">
-        ${room.characters
-          .map(
-            (character) => `
-              <button type="button" class="sheet-character-item ${character.id === selectedCharacter.id ? 'active' : ''}" data-character-id="${character.id}">
-                <strong>${character.playerName} / ${character.name}</strong>
-                <small>${character.role}</small>
-              </button>
-            `
-          )
-          .join('')}
-      </div>
-    `
-    : '';
+  sheetContentEl.innerHTML = `
+    <div class="sheet-list">
+      ${renderCharacterCard(selectedCharacter, false)}
+    </div>
+  `;
+  bindSheetInteractions(room, selectedCharacter);
+}
 
+// Карточка персонажа: аватар, поля шаблона и приватная заметка мастера внизу
+function renderCharacterCard(selectedCharacter, isOwner) {
   const fields = selectedCharacter.fields
     .map((field, index) => {
       const inputMarkup = field.type === 'textarea'
-        ? `<textarea class="sheet-field-textarea" rows="3">${field.value}</textarea>`
-        : `<input class="sheet-field-input" value="${field.value}" />`;
+        ? `<textarea class="sheet-field-textarea" rows="3">${escapeHtml(field.value)}</textarea>`
+        : `<input class="sheet-field-input" value="${escapeHtml(field.value)}" />`;
+
+      const deleteButton = isOwner
+        ? `<button type="button" class="sheet-field-delete" data-field-index="${index}" aria-label="Удалить поле">✕</button>`
+        : '';
 
       return `
         <div class="sheet-field">
-          <label>${field.label}</label>
+          <div class="sheet-field-head">
+            <label>${escapeHtml(field.label)}</label>
+            ${deleteButton}
+          </div>
           ${inputMarkup}
         </div>
       `;
@@ -406,33 +666,46 @@ function renderSheet(room) {
     .join('');
 
   const avatarMarkup = selectedCharacter.avatar
-    ? `<img src="${selectedCharacter.avatar}" alt="Изображение ${selectedCharacter.name}" />`
+    ? `<img src="${selectedCharacter.avatar}" alt="Изображение ${escapeHtml(selectedCharacter.name)}" />`
     : `<span class="sheet-image-placeholder">📷<span>${isOwner ? 'Выбрать изображение' : 'Изображение отсутствует'}</span></span>`;
 
   const avatarBlock = isOwner
     ? `<button type="button" class="sheet-image" data-avatar-trigger>${avatarMarkup}</button>`
     : `<div class="sheet-image">${avatarMarkup}</div>`;
 
-  sheetContentEl.innerHTML = `
-    <div class="sheet-list">
-      ${characterList}
-      <article class="character-card">
-        ${avatarBlock}
-        <h4>${selectedCharacter.name}</h4>
-        <div class="meta-row">
-          <span>${selectedCharacter.className}</span>
-          <span>${selectedCharacter.role}</span>
-        </div>
-        <div class="sheet-field">
-          <label>Игрок</label>
-          <input value="${selectedCharacter.playerName}" />
-        </div>
-        ${fields}
-      </article>
+  const hasNote = Boolean(selectedCharacter.dmNote && selectedCharacter.dmNote.trim());
+  const notebookBlock = `
+    <div class="sheet-notebook">
+      <button type="button" class="sheet-notebook-toggle" data-notebook-toggle>
+        <span>📓 Заметка мастера (приватно)${hasNote ? '<span class="notebook-dot"></span>' : ''}</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="sheet-notebook-body hidden">
+        ${isOwner
+          ? `<textarea class="sheet-notebook-textarea" rows="3" placeholder="Видно только этому игроку и вам">${escapeHtml(selectedCharacter.dmNote || '')}</textarea>`
+          : selectedCharacter.dmNote
+            ? `<div class="sheet-notebook-readonly">${escapeHtml(selectedCharacter.dmNote)}</div>`
+            : `<div class="sheet-notebook-readonly empty">Мастер пока не оставил вам заметок.</div>`}
+      </div>
     </div>
   `;
 
-  bindSheetInteractions(room, selectedCharacter);
+  return `
+    <article class="character-card">
+      ${avatarBlock}
+      <h4>${escapeHtml(selectedCharacter.name)}</h4>
+      <div class="meta-row">
+        <span>${escapeHtml(selectedCharacter.className)}</span>
+        <span>${escapeHtml(selectedCharacter.role)}</span>
+      </div>
+      <div class="sheet-field">
+        <label>Игрок</label>
+        <input value="${escapeHtml(selectedCharacter.playerName)}" />
+      </div>
+      ${fields}
+      ${notebookBlock}
+    </article>
+  `;
 }
 
 // БЛОК 13: список персонажей игрока для настроек
@@ -464,17 +737,102 @@ function seedAccountHistory() {
   }
 }
 
+// БЛОК: запись входа в кампанию вместе со снимком чата на этот момент
 function addSavedCampaignEntry(room, character) {
+  const now = new Date();
   const entry = {
     id: `${room.id}-${Date.now()}`,
     roomName: room.name,
     owner: room.owner,
     characterName: character?.name || 'Без героя',
-    enteredAt: new Date().toLocaleString('ru-RU')
+    enteredAt: now.toLocaleString('ru-RU'),
+    enteredAtIso: now.toISOString(),
+    messages: room.messages.map((message) => ({ ...message }))
   };
 
   userProfile.savedCampaigns = [entry, ...userProfile.savedCampaigns].slice(0, 8);
   userProfile.chronicles = [entry, ...userProfile.chronicles].slice(0, 8);
+}
+
+// БЛОК: поиск записи хроники по id (для просмотра чата и скачивания)
+function findChronicleEntry(id) {
+  return userProfile.chronicles.find((entry) => entry.id === id)
+    || userProfile.savedCampaigns.find((entry) => entry.id === id);
+}
+
+// БЛОК: фильтрация хроник по выбранной дате
+function getFilteredChronicles() {
+  const filterValue = chronicleDateFilterEl?.value;
+  if (!filterValue) return userProfile.chronicles;
+
+  return userProfile.chronicles.filter((entry) => {
+    if (!entry.enteredAtIso) return false;
+    const entryDate = new Date(entry.enteredAtIso);
+    const y = entryDate.getFullYear();
+    const m = String(entryDate.getMonth() + 1).padStart(2, '0');
+    const d = String(entryDate.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}` === filterValue;
+  });
+}
+
+// БЛОК: открытие модального окна с историей чата (только для чтения)
+function openChronicleChat(id) {
+  const entry = findChronicleEntry(id);
+  if (!entry || !chronicleChatModalEl) return;
+
+  activeChronicleId = id;
+  chronicleChatTitleEl.textContent = entry.roomName;
+  chronicleChatMetaEl.textContent = `${entry.characterName} • ${entry.owner} • ${entry.enteredAt}`;
+
+  chronicleChatMessagesEl.innerHTML = entry.messages?.length
+    ? entry.messages
+      .map((message) => `
+        <div class="message ${message.self ? 'self' : ''}">
+          <strong>${escapeHtml(message.author)}</strong>
+          <span>${escapeHtml(message.text)}</span>
+        </div>
+      `)
+      .join('')
+    : '<div class="empty-state">На момент этой записи в чате ещё не было сообщений.</div>';
+
+  chronicleChatModalEl.classList.remove('hidden');
+}
+
+function closeChronicleChat() {
+  chronicleChatModalEl.classList.add('hidden');
+  activeChronicleId = null;
+}
+
+// БЛОК: подготовка текстового файла с историей чата для скачивания
+function formatChronicleForDownload(entry) {
+  const lines = [
+    `Кампания: ${entry.roomName}`,
+    `Владелец: ${entry.owner}`,
+    `Персонаж: ${entry.characterName}`,
+    `Дата входа: ${entry.enteredAt}`,
+    '',
+    ...(entry.messages?.length
+      ? entry.messages.map((message) => `${message.author}: ${message.text}`)
+      : ['Сообщений нет.'])
+  ];
+  return lines.join('\n');
+}
+
+function downloadChronicleChat(id) {
+  const entry = findChronicleEntry(id);
+  if (!entry) return;
+
+  const content = formatChronicleForDownload(entry);
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  const safeName = entry.roomName.replace(/[^a-zA-Zа-яА-Я0-9]+/g, '_');
+  link.download = `chronicle_${safeName}_${entry.id}.txt`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function renderChronicles() {
@@ -489,24 +847,11 @@ function renderChronicles() {
         <span class="summary-pill">Входов: ${totalEntries}</span>
         <span class="summary-pill">Сохранено: ${savedCount}</span>
       </div>
-      <p>Здесь хранится история ваших возвращений в кампании, а также список комнат, к которым вы возвращались с любимым героем.</p>
+      <p>Здесь хранится история ваших возвращений в кампании: можно посмотреть чат на момент захода, скачать его или отфильтровать записи по дате.</p>
     `;
   }
 
-  if (!userProfile.chronicles.length) {
-    chroniclesListEl.innerHTML = '<div class="empty-state">Пока нет истории входов в кампании. Сначала откройте кампанию и пройдите один заход.</div>';
-  } else {
-    chroniclesListEl.innerHTML = userProfile.chronicles
-      .map((entry) => `
-        <div class="profile-character-card">
-          <div>
-            <strong>${entry.roomName}</strong>
-            <small>${entry.characterName} • ${entry.enteredAt}</small>
-          </div>
-        </div>
-      `)
-      .join('');
-  }
+  renderChroniclesList();
 
   if (!userProfile.savedCampaigns.length) {
     savedCampaignsListEl.innerHTML = '<div class="empty-state">Кампании ещё не сохранялись на аккаунте. Открытие любой комнаты добавит запись в список.</div>';
@@ -515,13 +860,48 @@ function renderChronicles() {
       .map((entry) => `
         <div class="profile-character-card">
           <div>
-            <strong>${entry.roomName}</strong>
-            <small>${entry.characterName} • ${entry.owner}</small>
+            <strong>${escapeHtml(entry.roomName)}</strong>
+            <small>${escapeHtml(entry.characterName)} • ${escapeHtml(entry.owner)}</small>
           </div>
         </div>
       `)
       .join('');
   }
+}
+
+// БЛОК: отрисовка списка хроник (с учётом фильтра по дате) и её кнопок
+function renderChroniclesList() {
+  const list = getFilteredChronicles();
+
+  if (!list.length) {
+    chroniclesListEl.innerHTML = userProfile.chronicles.length
+      ? '<div class="empty-state">На выбранную дату записей нет. Попробуйте другую дату или сбросьте фильтр.</div>'
+      : '<div class="empty-state">Пока нет истории входов в кампании. Сначала откройте кампанию и пройдите один заход.</div>';
+    return;
+  }
+
+  chroniclesListEl.innerHTML = list
+    .map((entry) => `
+      <div class="profile-character-card">
+        <div>
+          <strong>${escapeHtml(entry.roomName)}</strong>
+          <small>${escapeHtml(entry.characterName)} • ${escapeHtml(entry.enteredAt)}</small>
+        </div>
+        <div class="profile-character-actions">
+          <button type="button" class="button ghost small" data-action="view-chronicle-chat" data-chronicle-id="${entry.id}">Чат</button>
+          <button type="button" class="button ghost small" data-action="download-chronicle" data-chronicle-id="${entry.id}">Скачать</button>
+        </div>
+      </div>
+    `)
+    .join('');
+
+  chroniclesListEl.querySelectorAll('[data-action="view-chronicle-chat"]').forEach((button) => {
+    button.addEventListener('click', () => openChronicleChat(button.dataset.chronicleId));
+  });
+
+  chroniclesListEl.querySelectorAll('[data-action="download-chronicle"]').forEach((button) => {
+    button.addEventListener('click', () => downloadChronicleChat(button.dataset.chronicleId));
+  });
 }
 
 // БЛОК 14: тема интерфейса — светлая или тёмная
@@ -564,8 +944,8 @@ function renderProfileCharacters() {
       profileCharacterListEl.innerHTML = `
         <div class="profile-character-card">
           <div>
-            <strong>${fallbackCharacter.name}</strong>
-            <small>${fallbackCharacter.className} • ${fallbackCharacter.role}</small>
+            <strong>${escapeHtml(fallbackCharacter.name)}</strong>
+            <small>${escapeHtml(fallbackCharacter.className)} • ${escapeHtml(fallbackCharacter.role)}</small>
           </div>
           <div class="profile-character-actions">
             <button type="button" class="button ghost small" data-action="open" data-character-id="${fallbackCharacter.id}" data-room-id="${fallbackRoom.id}">Открыть</button>
@@ -590,8 +970,8 @@ function renderProfileCharacters() {
       return `
         <div class="profile-character-card">
           <div>
-            <strong>${character.name}</strong>
-            <small>${character.className} • ${character.role}</small>
+            <strong>${escapeHtml(character.name)}</strong>
+            <small>${escapeHtml(character.className)} • ${escapeHtml(character.role)}</small>
           </div>
           <div class="profile-character-actions">
             <button type="button" class="button ghost small" data-action="open" data-character-id="${character.id}" data-room-id="${room?.id}">Открыть</button>
@@ -687,7 +1067,57 @@ function setActiveView(view) {
   }
 }
 
-// БЛОК 19: общая перерисовка интерфейса после изменений
+// БЛОК 18б: «Портрет группы» на главной — реальные аватары персонажей текущей
+// кампании; клик по аве переносит мастера в ширму этого персонажа.
+function renderGroupPortrait() {
+  const groupAvatarStackEl = document.getElementById('group-avatar-stack');
+  if (!groupAvatarStackEl) return;
+
+  const room = rooms.find((item) => item.id === activeRoomId) || rooms[0];
+  if (!room) return;
+
+  const roster = getRoomRosterEntries(room);
+  if (!roster.length) {
+    groupAvatarStackEl.innerHTML = '<p class="muted">В этой комнате пока нет персонажей.</p>';
+    return;
+  }
+
+  const isRoomOwnerView = room.role === 'owner';
+
+  groupAvatarStackEl.innerHTML = roster
+    .map((entry) => {
+      const isClickable = isRoomOwnerView;
+      const avatarInner = entry.avatar
+        ? `<img src="${entry.avatar}" alt="" />`
+        : escapeHtml((entry.displayName || '?').charAt(0).toUpperCase());
+      const clickableAttrs = isClickable ? `data-goto-character="${entry.id}" role="button" tabindex="0"` : '';
+      return `<div class="avatar ${isClickable ? 'clickable' : ''}" ${clickableAttrs} title="${escapeHtml(entry.displayName)}">${avatarInner}</div>`;
+    })
+    .join('');
+
+  groupAvatarStackEl.querySelectorAll('[data-goto-character]').forEach((element) => {
+    const goToCharacterSheet = () => {
+      const characterId = element.dataset.gotoCharacter;
+      activeRoomId = room.id;
+      activeRole = 'owner';
+      activeCharacterByRoom[room.id] = characterId;
+      updateRoleButtons();
+      sheetPinned = true;
+      updateSheetState();
+      setActiveView('campaign');
+      render();
+    };
+
+    element.addEventListener('click', goToCharacterSheet);
+    element.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        goToCharacterSheet();
+      }
+    });
+  });
+}
+
 // БЛОК 19: общая перерисовка интерфейса после изменений
 function render() {
   const room = rooms.find((item) => item.id === activeRoomId) || rooms[0];
@@ -700,6 +1130,7 @@ function render() {
   renderRooms();
   renderProfileCharacters();
   renderChronicles();
+  renderGroupPortrait();
 }
 
 // БЛОК 20: обработчики событий интерфейса — чат, кубы, ширма, настройки и создание комнат
@@ -726,20 +1157,14 @@ diceButtons.forEach((button) => {
 });
 
 rollCustomBtnEl.addEventListener('click', () => {
-  const expression = diceCustomInputEl.value.trim();
-  if (!expression) return;
+  performCustomRoll();
+});
 
-  const result = rollDiceFormula(expression);
-  if (!result) {
-    const room = rooms.find((item) => item.id === activeRoomId);
-    if (!room) return;
-    room.messages.push({ author: 'Система', text: 'Формат куба не распознан. Попробуй: d20, 2d10, 3d6+2', self: false });
-    renderMessages(room);
-    return;
+diceCustomInputEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    performCustomRoll();
   }
-
-  addDiceMessage(expression, result);
-  diceCustomInputEl.value = '';
 });
 
 sheetToggleBtnEl.addEventListener('click', () => {
@@ -751,7 +1176,7 @@ addImageBtnEl.addEventListener('click', () => {
   if (activeRole !== 'owner') return;
 
   const room = rooms.find((item) => item.id === activeRoomId);
-  const selectedCharacter = room ? getSelectedCharacter(room) : null;
+  const selectedCharacter = room ? getActiveRealCharacter(room) : null;
   if (!selectedCharacter) return;
   avatarInputEl.click();
 });
@@ -760,7 +1185,7 @@ addFieldBtnEl.addEventListener('click', () => {
   if (activeRole !== 'owner') return;
 
   const room = rooms.find((item) => item.id === activeRoomId);
-  const selectedCharacter = room ? getSelectedCharacter(room) : null;
+  const selectedCharacter = room ? getActiveRealCharacter(room) : null;
   if (!selectedCharacter) return;
 
   selectedCharacter.fields.push({ label: 'Новое поле', value: '', type: 'text' });
@@ -874,6 +1299,7 @@ saveNewCharacterBtnEl.addEventListener('click', () => {
     role,
     className,
     avatar: '',
+    dmNote: '',
     fields: [
       { label: 'Раса', value: 'Не указана', type: 'text' },
       { label: 'Возраст', value: '', type: 'text' },
@@ -892,7 +1318,7 @@ saveNewCharacterBtnEl.addEventListener('click', () => {
 leaveCampaignBtnEl.addEventListener('click', () => {
   const room = rooms.find((item) => item.id === activeRoomId);
   if (!room) return;
-  const selectedCharacter = room ? getSelectedCharacter(room) : null;
+  const selectedCharacter = room ? getActiveRealCharacter(room) : null;
   if (selectedCharacter) {
     addSavedCampaignEntry(room, selectedCharacter);
   }
@@ -909,7 +1335,23 @@ openCampaignButtons.forEach((button) => {
   });
 });
 
+function renderParticipantPicker() {
+  if (!participantPickerListEl) return;
+  participantPickerListEl.innerHTML = DEMO_PLAYER_POOL
+    .map((name) => `
+      <label class="participant-picker-item">
+        <input type="checkbox" name="participant" value="${escapeHtml(name)}" />
+        <span>${escapeHtml(name)}</span>
+      </label>
+    `)
+    .join('');
+}
+
 createRoomBtn.addEventListener('click', () => {
+  if (modalOwnerNameEl) {
+    modalOwnerNameEl.textContent = userProfile.displayName;
+  }
+  renderParticipantPicker();
   modalBackdrop.classList.remove('hidden');
 });
 
@@ -923,14 +1365,49 @@ modalBackdrop.addEventListener('click', (event) => {
   }
 });
 
+if (chronicleChatCloseEl) {
+  chronicleChatCloseEl.addEventListener('click', () => {
+    closeChronicleChat();
+  });
+}
+
+if (chronicleChatModalEl) {
+  chronicleChatModalEl.addEventListener('click', (event) => {
+    if (event.target === chronicleChatModalEl) {
+      closeChronicleChat();
+    }
+  });
+}
+
+if (chronicleDownloadBtnEl) {
+  chronicleDownloadBtnEl.addEventListener('click', () => {
+    if (activeChronicleId) {
+      downloadChronicleChat(activeChronicleId);
+    }
+  });
+}
+
+if (chronicleDateFilterEl) {
+  chronicleDateFilterEl.addEventListener('change', () => {
+    renderChroniclesList();
+  });
+}
+
+if (chronicleDateResetEl) {
+  chronicleDateResetEl.addEventListener('click', () => {
+    chronicleDateFilterEl.value = '';
+    renderChroniclesList();
+  });
+}
+
 roomForm.addEventListener('submit', (event) => {
   event.preventDefault();
   const formData = new FormData(roomForm);
   const roomName = formData.get('roomName')?.toString().trim();
-  const ownerName = formData.get('ownerName')?.toString().trim();
-  const participants = formData.get('participants')?.toString().split(',').map((name) => name.trim()).filter(Boolean) || [];
+  const ownerName = userProfile.displayName;
+  const participants = formData.getAll('participant').map((value) => value.toString());
 
-  if (!roomName || !ownerName) return;
+  if (!roomName) return;
 
   const newRoom = {
     id: Date.now(),
@@ -938,12 +1415,20 @@ roomForm.addEventListener('submit', (event) => {
     owner: ownerName,
     participants,
     role: 'owner',
-    messages: [
-      { author: ownerName, text: 'Комната создана. Начинаем сцену.', self: false },
-      { author: 'Вы', text: 'Я уже готов к первому ходу.', self: true }
-    ],
+    messages: [],
     characters: [
-      { name: ownerName, role: 'Мастер', className: 'Ведущий', notes: 'Контролирует сцену и тайны' }
+      {
+        id: `char-${Date.now()}`,
+        playerName: ownerName,
+        name: ownerName,
+        role: 'Мастер',
+        className: 'Ведущий',
+        avatar: '',
+        dmNote: '',
+        fields: [
+          { label: 'Заметки', value: 'Контролирует сцену и тайны', type: 'textarea' }
+        ]
+      }
     ]
   };
 
